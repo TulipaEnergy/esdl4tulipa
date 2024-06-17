@@ -33,11 +33,12 @@ keywords = [
 license = {file = "LICENSE"}
 readme = {file = "README.md", content-type = "text/markdown"}
 dynamic = ["version"]
-requires-python = ">=3.8"
-dependencies = ["pyESDL[profiles]", "duckdb"]
+requires-python = ">=3.10"
+dependencies = ["duckdb", "glom", "pyESDL[profiles]", "tabulate"]
 
 [project.optional-dependencies]
 dev = [
+    "mypy",
     "pytest",
     "pytest-cov",
 ]
