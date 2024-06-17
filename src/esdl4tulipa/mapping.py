@@ -20,11 +20,11 @@ _storage = deepcopy(_producers)
 _storage.pop("power")
 
 ESDL2TULIPA = {
-    "consumers": {
+    "consumer": {
         **_base,
         "power": ("peak_demand", float),
     },
-    "producers": {**_producers},
+    "producer": {**_producers},
     "conversion": {
         **_producers,
         "efficiency": ("efficiency", float),
@@ -58,6 +58,7 @@ def make_asset_t(kind: str) -> type:
     if kind not in ESDL2TULIPA:
         raise ValueError(f"unknown {kind=}, not one of {list(ESDL2TULIPA)}")
 
+    # FIXME: add type validation
     def __post_init__(self):
         for key, field_t in self.__annotations__.items():
             value = getattr(self, key)
