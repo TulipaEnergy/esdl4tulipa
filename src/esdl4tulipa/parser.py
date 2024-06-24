@@ -1,16 +1,14 @@
 """Load and parse an ESDL file."""
 
-from dataclasses import asdict
 from typing import Callable
-from typing import Literal
 from esdl import esdl
 from esdl.esdl_handler import EnergySystemHandler
 from glom import glom
 from pyecore.ecore import EObject
 from pyecore.ecore import EOrderedSet
 from tabulate import tabulate
-from .mapping import asset_types
 from .mapping import ESDL2TULIPA
+from .mapping import asset_types
 
 _HANDLER = EnergySystemHandler()
 
@@ -109,7 +107,7 @@ def edge(out_port, in_port) -> dict:
     return {"from": asset1.name, "to": asset2.name, **merged}
 
 
-def find_edge(asset: EObject) -> list[tuple]:
+def find_edge(asset: EObject) -> list[dict]:
     """Find all out going connections to other assets."""
     return [
         edge(port, in_port)
@@ -121,8 +119,8 @@ def find_edge(asset: EObject) -> list[tuple]:
 
 def parse_graph(
     obj: EObject | EOrderedSet,
-    predicate: Callable[[EObject], list[tuple]],
-    res: list[tuple],
+    predicate: Callable[[EObject], list[dict]],
+    res: list[dict],
 ):
     """Parse ecore object to extract node attributes and connections.
 
