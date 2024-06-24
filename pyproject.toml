@@ -66,9 +66,11 @@ extend-exclude ='''
 
 [tool.mypy]
 ignore_missing_imports = true
+check_untyped_defs = true
 files = "src"
 
 [tool.ruff]
+respect-gitignore = true
 exclude = [
     ".direnv",
     ".eggs",
