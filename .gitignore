@@ -1,4 +1,11 @@
-*.py[cod]
+# backup files
+*~
+\#*\#
+
+# managed by setuptools_scm
+_version.py
+
+*.py[codi]
 *.egg-info
 *.eggs
 .ipynb_checkpoints
