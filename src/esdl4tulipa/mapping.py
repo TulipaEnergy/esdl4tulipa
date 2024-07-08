@@ -1,80 +1,162 @@
 """Mapping ESDL to Tulipa terminology."""
 
-from copy import deepcopy
-from dataclasses import field
+from dataclasses import dataclass
+from dataclasses import fields
 from dataclasses import is_dataclass
-from dataclasses import make_dataclass
+from typing import Type
+from typing import TypeVar
+from typing import Union
 
-_base = {"name": ("name", str), "id": ("id", str), "state": ("active", bool)}
-_producers = {
-    **_base,
-    "costInformation.investmentCosts.value": ("investment_cost", float),
-    "costInformation.variableOperationalAndMaintenanceCosts.value": (
-        "variable_cost",
-        float,
-    ),
-    "technicalLifetime": ("lifetime", float),
-    "power": ("initial_capacity", float),
-}
-_storage = deepcopy(_producers)
-_storage.pop("power")
-
-ESDL2TULIPA = {
-    "consumer": {
-        **_base,
-        "power": ("peak_demand", float),
-    },
-    "producer": {**_producers},
-    "conversion": {
-        **_producers,
-        "efficiency": ("efficiency", float),
-        # "inputOutputRelation": ("efficiency", float),  # FIXME: duplicate
-    },
-    "storage": {
-        **_storage,
-        "maxDischargeRate": ("capacity", float),
-        # "maxChargeRate": ("capacity", float),  # FIXME: duplicate
-        "fillLevel": ("initial_storage_level", float),
-        "capacity": ("initial_storage_capacity", float),
-    },
-}
+T = TypeVar("T")
 
 
-def make_asset_t(kind: str) -> type:
-    """Create dataclass from list of fields and types.
+def unguarded_is_dataclass(_type: Type[T], /) -> bool:
+    """Remove :ref:`TypeGuard` from is_dataclass.
 
-    Parameters
-    ----------
-    kind : Literal['consumers', 'producers', 'conversion', 'storage']
-        The fields are defined in the module level dictionary
-        `ESDL2TULIPA`.  They are separated by asset type: 'consumers',
-        'producers', 'conversion', 'storage'.
-
-    Returns
-    -------
-    <custom_dataclass>
-
+    see: https://github.com/python/mypy/issues/14941
     """
-    if kind not in ESDL2TULIPA:
-        raise ValueError(f"unknown {kind=}, not one of {list(ESDL2TULIPA)}")
+    return is_dataclass(_type)
+
+
+@dataclass(unsafe_hash=True)
+class AssetData:
+    """Base dataclass to represent :ref:`esdl.esdl.EnergyAsset`."""
+
+    name: str = ""
+    id: str = ""
+    active: bool = False
+
+    @classmethod
+    def esdl_key(cls, key: str) -> str:
+        """Get corresponding ESDL attribute."""
+        _esdl_key = {"name": "name", "id": "id", "active": "state.value"}
+        return _esdl_key.get(key, "")
+
+    @classmethod
+    def fields(cls) -> list[str]:
+        """Fields of the dataclass."""
+        return [fld.name for fld in fields(cls)]
 
     # FIXME: add type validation
-    def __post_init__(self):
+    def __post_init__(self):  # noqa: D105
         for key, field_t in self.__annotations__.items():
             value = getattr(self, key)
-            if not is_dataclass(field_t) or isinstance(value, dict):
+            if not unguarded_is_dataclass(field_t) or isinstance(value, dict):
                 continue
             setattr(self, key, field_t(**value))
 
-    fields = [
-        (*f, field(default=None)) if len(f) == 2 else f
-        for f in ESDL2TULIPA[kind].values()
-    ]
-    return make_dataclass(
-        f"{kind}_t", fields, namespace={"__post_init__": __post_init__}
-    )
+
+@dataclass(unsafe_hash=True)
+class hub_t(AssetData):  # noqa: D101
+    pass
 
 
-# create dataclasses for each kind, so the types can be reused, and
-# created instances will be of the same type
-asset_types = {kind: make_asset_t(kind) for kind in ESDL2TULIPA}
+@dataclass(unsafe_hash=True)
+class consumer_t(AssetData):  # noqa: D101
+    peak_demand: float | None = None
+
+    @classmethod
+    def esdl_key(cls, key: str) -> str:  # noqa: D102
+        if res := super().esdl_key(key):
+            return res
+        else:
+            _esdl_key = {"peak_demand": "power"}
+            return _esdl_key.get(key, "")
+
+
+@dataclass(unsafe_hash=True)
+class _producer_t(AssetData):  # noqa: D101
+    investment_cost: float | None = None
+    variable_cost: float | None = None
+    lifetime: float | None = None
+
+    @classmethod
+    def esdl_key(cls, key: str) -> str:  # noqa: D102
+        if res := super().esdl_key(key):
+            return res
+        else:
+            _esdl_key = {
+                "investment_cost": "costInformation.investmentCosts.value",
+                "variable_cost": "costInformation.variableOperationalAndMaintenanceCosts.value",  # noqa: E501
+                "lifetime": "technicalLifetime",
+            }
+            return _esdl_key.get(key, "")
+
+
+@dataclass(unsafe_hash=True)
+class producer_t(_producer_t):  # noqa: D101
+    initial_capacity: float | None = None
+
+    @classmethod
+    def esdl_key(cls, key: str) -> str:  # noqa: D102
+        if res := super().esdl_key(key):
+            return res
+        else:
+            _esdl_key = {"initial_capacity": "power"}
+            return _esdl_key.get(key, "")
+
+
+@dataclass(unsafe_hash=True)
+class conversion_t(producer_t):  # noqa: D101
+    efficiency: float | None = None
+
+    @classmethod
+    def esdl_key(cls, key: str) -> str:  # noqa: D102
+        if res := super().esdl_key(key):
+            return res
+        else:
+            _esdl_key = {
+                "efficiency": "efficiency"
+                # "efficiency": "inputOutputRelation",  # FIXME: duplicate
+            }
+            return _esdl_key.get(key, "")
+
+
+@dataclass(unsafe_hash=True)
+class storage_t(AssetData):  # noqa: D101
+    capacity: float | None = None
+    initial_storage_level: float | None = None
+    initial_storage_capacity: float | None = None
+
+    @classmethod
+    def esdl_key(cls, key: str) -> str:  # noqa: D102
+        if res := super().esdl_key(key):
+            return res
+        else:
+            _esdl_key = {
+                "capacity": "maxDischargeRate",
+                # "capacity": "maxChargeRate",  # FIXME: duplicate
+                "initial_storage_level": "fillLevel",
+                "initial_storage_capacity": "capacity",
+            }
+            return _esdl_key.get(key, "")
+
+
+@dataclass(unsafe_hash=True)
+class flow_t(_producer_t):  # noqa: D101
+    from_asset: str = ""
+    to_asset: str = ""
+    capacity: float | None = None
+    efficiency: float | None = None
+
+    @classmethod
+    def esdl_key(cls, key: str) -> str:  # noqa: D102
+        if res := super().esdl_key(key):
+            return res
+        else:
+            _esdl_key = {
+                "capacity": "capacity",
+                "efficiency": "efficiency",
+            }
+            return _esdl_key.get(key, "")
+
+
+ESDLAssets = Union[hub_t, consumer_t, producer_t, conversion_t, storage_t, flow_t]
+asset_types: dict[str, type[ESDLAssets]] = {
+    "energynetwork": hub_t,
+    "consumer": consumer_t,
+    "producer": producer_t,
+    "conversion": conversion_t,
+    "storage": storage_t,
+    "transport": flow_t,
+}
