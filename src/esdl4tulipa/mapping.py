@@ -41,9 +41,9 @@ class AssetData:
     def __post_init__(self):  # noqa: D105
         for key, field_t in self.__annotations__.items():
             value = getattr(self, key)
-            if not unguarded_is_dataclass(field_t) or isinstance(value, dict):
-                continue
-            setattr(self, key, field_t(**value))
+            print(key, field_t, unguarded_is_dataclass(field_t), value)
+            if unguarded_is_dataclass(field_t) and isinstance(value, dict):
+                setattr(self, key, field_t(**value))
 
 
 @dataclass(unsafe_hash=True)
