@@ -5,8 +5,7 @@ from dataclasses import fields
 from functools import reduce
 from io import StringIO
 from itertools import chain
-from itertools import islice
-from typing import Callable
+from typing import Callable, Generator
 from typing import TypeAlias
 from typing import TypeVar
 from esdl import esdl
@@ -37,11 +36,58 @@ _kind_ts = {
 # https://peps.python.org/pep-0636/#matching-multiple-patterns
 
 
-ESDLNode: TypeAlias = esdl.EnergySystem | esdl.Area | esdl.EnergyAsset
+def kinds(*assets: esdl.EnergyAsset, unique=True) -> list[str] | set[str]:
+    """Find and return `kinds` for all assets.
+
+    The implementation hardcodes the resolution between a generic
+    'transport' asset and an 'energynetwork'.
+
+    Raises
+    ------
+    RuntimeError
+        If one asset resolves to multiple kinds unexpectedly. This may
+        happen when the inheritance tree on the ESDL side has
+        ambiguity.  It needs to be explicitly resolved, as done for
+        the case of 'transport' and 'energynetwork'.
+
+    """
+    res: list[str] = []
+    for a in assets:
+        ks = {k for k, t in _kind_ts.items() if isinstance(a, t)}
+        if len(ks) > 1:
+            if ks == {"energynetwork", "transport"}:
+                res.append("energynetwork")
+            else:
+                raise RuntimeError(f"{a}: unexpected asset type {ks}")
+        else:
+            res.extend(ks)
+    return set(res) if unique else res
 
 
-def batched(assets: list[esdl.EnergyAsset]):
-    """Batched iteration; in itertools from Python >=3.12."""
+def batched(
+    assets: list[esdl.EnergyAsset],
+) -> Generator[list[esdl.EnergyAsset], None, None]:
+    """Partition a sequence of assets based on allowed terminating nodes.
+
+    Parameters
+    ----------
+    assets: list[esdl.EnergyAsset]
+        Sequence of assets that comprise of trailing edges (in
+        technical term: `cdr` of an edge).  Example, the following
+        edges:
+
+        - (from, link, to) -> (link, to)
+        - (from, to₂) -> (to)
+        - (from, ...)
+
+        are represented as the sequence: (link, to₁, to₂, ...)
+
+    Returns
+    -------
+    Generator[list[esdl.EnergyAsset], None, None]
+        A generator over the partitioned trailing edges
+
+    """
     batch = []
     for asset in assets:
         batch.append(asset)
@@ -163,28 +209,6 @@ def merge_assets(asset1: ESDLAssets, asset2: ESDLAssets, **overrides) -> ESDLAss
     return flow_t(**merged, **overrides)
 
 
-def kinds(*assets: esdl.EnergyAsset) -> set[str]:
-    """Find and return `kinds` for all assets.
-
-    Raises
-    ------
-    RuntimeError
-        If one asset resolves to multiple kinds
-
-    """
-    res: set[str] = set()
-    for a in assets:
-        ks = {k for k, t in _kind_ts.items() if isinstance(a, t)}
-        if len(ks) > 1:
-            if ks == {"energynetwork", "transport"}:
-                res = res.union({"energynetwork"})
-            else:
-                raise RuntimeError(f"{a}: unexpected asset type {ks}")
-        else:
-            res = res.union(ks)
-    return res
-
-
 def edge(*assets: esdl.EnergyAsset) -> tuple[ESDLAssets, ESDLAssets, ESDLAssets]:
     """Create a Tulipa flow, and assets from ESDL assets.
 
@@ -252,7 +276,7 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[ESDLAssets, ESDLAssets, ESDLAssets]
     return (flow, from_asset, to_asset)
 
 
-def itr_edges(
+def itr_nodes(
     asset: esdl.EnergyAsset, edges: list[esdl.EnergyAsset], depth: int
 ) -> list[esdl.EnergyAsset]:
     """Iterate over outgoing ports from an asset, and find the next asset.
@@ -268,7 +292,7 @@ def itr_edges(
     depth : int
         Counter keeping track of number of assets encountered; if this
         exceeds 2 and recursion continues, raise :ref:`RecursionError`.
-        Subsequent call to :ref:`hop_edges` increments depth by 1.
+        Subsequent call to :ref:`hop_nodes` increments depth by 1.
 
     Returns
     -------
@@ -290,11 +314,11 @@ def itr_edges(
             if isinstance(_port2, esdl.OutPort):
                 continue
             _asset = _port2.energyasset
-            hop_edges(_asset, edges, depth + 1)
+            hop_nodes(_asset, edges, depth + 1)
     return edges
 
 
-def hop_edges(
+def hop_nodes(
     asset: esdl.EnergyAsset, edges: list[esdl.EnergyAsset], depth: int = 1
 ) -> list[esdl.EnergyAsset]:
     """Find all the assets that have an incoming flow from initially provided asset.
@@ -331,12 +355,12 @@ def hop_edges(
             esdl.Producer() | esdl.Conversion() | esdl.Storage() | esdl.EnergyNetwork()
         ) if depth == 1:
             edges.append(asset)
-            itr_edges(asset, edges, depth)
+            itr_nodes(asset, edges, depth)
         case esdl.Transport() if depth == 2 and not isinstance(
             asset, esdl.EnergyNetwork
         ):
             edges.append(asset)
-            itr_edges(asset, edges, depth)
+            itr_nodes(asset, edges, depth)
         case (
             esdl.Consumer() | esdl.Conversion() | esdl.Storage() | esdl.EnergyNetwork()
         ) if depth > 1:
@@ -348,13 +372,14 @@ def hop_edges(
 
 def find_edges(asset: esdl.EnergyAsset) -> list[tuple[ESDLAssets, ...]]:
     """Find all out going flows from the provided asset."""
-    if (edges := hop_edges(asset, [])) and len(edges) > 1:
+    if (edges := hop_nodes(asset, [])) and len(edges) > 1:
         from_asset, *rest = edges
         return [edge(from_asset, *assets) for assets in batched(rest)]
     else:
         return []
 
 
+ESDLNode: TypeAlias = esdl.EnergySystem | esdl.Area | esdl.EnergyAsset
 res_t = TypeVar("res_t", tuple, list, set, dict, esdl.EnergyAsset)
 
 
