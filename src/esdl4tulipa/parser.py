@@ -9,6 +9,7 @@ from typing import Callable
 from typing import Generator
 from typing import TypeAlias
 from typing import TypeVar
+from typing import cast
 from esdl import esdl
 from esdl.esdl_handler import EnergySystemHandler
 from pyecore.ecore import EOrderedSet
@@ -219,7 +220,7 @@ def merge_assets(asset1: TAssets, asset2: TAssets, **overrides) -> flow_t:
     return flow_t(**merged)
 
 
-def edge(*assets: esdl.EnergyAsset) -> tuple[TAssets, TAssets, TAssets]:
+def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
     """Create a Tulipa flow, and assets from ESDL assets.
 
     Parameters
@@ -277,9 +278,11 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[TAssets, TAssets, TAssets]:
             # NOTE: len(kinds(...)) <= 2 to support EnergyNetwork -> EnergyNetwork
             from_asset = fill_asset(a1)
             to_asset = fill_asset(a2)
-            flow = fill_asset(
-                link, from_asset=a1.name, to_asset=a2.name, name="", id=""
-            )  # reset 'name' & 'id' for flow
+            flow = cast(
+                flow_t,
+                # reset 'name' & 'id' for flow
+                fill_asset(link, from_asset=a1.name, to_asset=a2.name, name="", id=""),
+            )
         case _:
             # NOTE: unhandled case: asset, transport, ..., asset
             raise ValueError(f"{assets=}: uncharted territory!")
@@ -363,10 +366,7 @@ def hop_nodes(
     """
     match asset:
         case (
-            esdl.Producer()
-            | esdl.Conversion()
-            | esdl.Storage()
-            | esdl.EnergyNetwork()
+            esdl.Producer() | esdl.Conversion() | esdl.Storage() | esdl.EnergyNetwork()
         ) if depth == 1:
             edges.append(asset)
             itr_nodes(asset, edges, depth)
@@ -376,10 +376,7 @@ def hop_nodes(
             edges.append(asset)
             itr_nodes(asset, edges, depth)
         case (
-            esdl.Consumer()
-            | esdl.Conversion()
-            | esdl.Storage()
-            | esdl.EnergyNetwork()
+            esdl.Consumer() | esdl.Conversion() | esdl.Storage() | esdl.EnergyNetwork()
         ) if depth > 1:
             edges.append(asset)
         case _:
@@ -466,13 +463,8 @@ def parse_graph(
             if isinstance(obj.asset, EOrderedSet):  # may also contain assets
                 parse_graph(obj.asset, predicate, res, visit_all=visit_all)
         case (
-            (
-                esdl.Producer()
-                | esdl.Conversion()
-                | esdl.Storage()
-                | esdl.EnergyNetwork()
-            ) as asset
-        ):
+            esdl.Producer() | esdl.Conversion() | esdl.Storage() | esdl.EnergyNetwork()
+        ) as asset:
             _apply(predicate, asset, res)
         case (esdl.Transport() | esdl.Consumer()) as asset:
             if visit_all:  # only follow out going flows by default
