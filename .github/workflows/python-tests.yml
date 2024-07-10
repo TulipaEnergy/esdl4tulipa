@@ -19,7 +19,8 @@ jobs:
   format:
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.13"]
+        # test with minimum & prerelease
 
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +41,7 @@ jobs:
   lint:
     strategy:
       matrix:
-        python-version: ["py310", "py311", "py312"]
+        python-version: ["py310", "py312"]
 
     runs-on: ubuntu-latest
     steps:
