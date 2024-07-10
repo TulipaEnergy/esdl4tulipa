@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from dataclasses import fields
 from dataclasses import is_dataclass
 from typing import Type
+from typing import TypeAlias
 from typing import TypeVar
 from typing import Union
 
@@ -41,7 +42,6 @@ class AssetData:
     def __post_init__(self):  # noqa: D105
         for key, field_t in self.__annotations__.items():
             value = getattr(self, key)
-            print(key, field_t, unguarded_is_dataclass(field_t), value)
             if unguarded_is_dataclass(field_t) and isinstance(value, dict):
                 setattr(self, key, field_t(**value))
 
@@ -151,8 +151,10 @@ class flow_t(_producer_t):  # noqa: D101
             return _esdl_key.get(key, "")
 
 
-ESDLAssets = Union[hub_t, consumer_t, producer_t, conversion_t, storage_t, flow_t]
-asset_types: dict[str, type[ESDLAssets]] = {
+TAssets: TypeAlias = Union[
+    hub_t, consumer_t, producer_t, conversion_t, storage_t, flow_t
+]
+asset_types: dict[str, type[TAssets]] = {
     "energynetwork": hub_t,
     "consumer": consumer_t,
     "producer": producer_t,

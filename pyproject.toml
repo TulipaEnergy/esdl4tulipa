@@ -55,6 +55,7 @@ version_scheme = "release-branch-semver"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib", "--cov=src", "-q"]
+filterwarnings = ['ignore:invalid escape sequence:SyntaxWarning']
 
 [tool.black]
 include = '\.pyi?$'
