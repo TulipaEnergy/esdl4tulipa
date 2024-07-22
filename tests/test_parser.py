@@ -122,7 +122,7 @@ def test_merge_assets_err(edges):
     a2.lifetime = 20
     hdr = f"{a1.name} != {a2.name}"
     body = f"lifetime.+{a1.lifetime}.+{a2.lifetime}"
-    with pytest.raises(ValueError, match=f"{hdr}[\s\S]+{body}"):
+    with pytest.raises(ValueError, match=rf"{hdr}[\s\S]+{body}"):
         assert merge_assets(a1, a2)
 
 
@@ -173,6 +173,7 @@ def test_find_edges(edges):
         )
 
 
+## integration tests
 def test_parse_graph():
     # TODO: test more meaningful things
     ensys = debug("tests/data/esdl/norse-mythology-good.esdl")
@@ -181,8 +182,33 @@ def test_parse_graph():
     assert len(assets) < len(assets_all)
 
 
-def test_load():
+@pytest.mark.parametrize(
+    "fname, nflows, nassets",
+    [
+        ("Tiny.esdl", 4, 5),
+        ("norse-mythology-good.esdl", 35, 29),
+        ("vehicle_charging_etc.esdl", 13, 12),
+    ],
+)
+def test_load(fname, nflows, nassets):
     # TODO: test more meaningful things
-    flows, assets = load("tests/data/esdl/norse-mythology-good.esdl")
-    assert len(flows) == 35
-    assert len(assets) == 29
+    flows, assets = load(f"tests/data/esdl/{fname}")
+    assert len(flows) == nflows
+    assert len(assets) == nassets
+
+
+@pytest.mark.parametrize(
+    "fname, exc, msg",
+    [
+        (
+            "norse-mythology-bad.esdl",
+            ValueError,
+            r"mismatching assets.+[\s\S]+.+_cost.+[\s\S]+.+_cost",
+        ),
+        ("eye_simulation.esdl", ValueError, "unsupported node"),
+        ("mesido.esdl", ValueError, r"why am I here.+depth"),
+    ],
+)
+def test_load_errors(fname, exc, msg):
+    with pytest.raises(exc, match=msg):
+        load(f"tests/data/esdl/{fname}")
