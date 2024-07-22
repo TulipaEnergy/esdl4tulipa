@@ -241,7 +241,7 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
         .. code::
 
            asset1: producer | conversion | storage | energynetwork
-           asset2: producer | conversion | storage | energynetwork
+           asset2: consumer | conversion | storage | energynetwork
 
            (asset1, asset2)
 
@@ -470,7 +470,7 @@ def parse_graph(
             if visit_all:  # only follow out going flows by default
                 _apply(predicate, asset, res)
         case _:
-            raise ValueError(f"{obj}: unsupported value")
+            raise ValueError(f"{obj}: unsupported node")
     return res
 
 
