@@ -220,6 +220,35 @@ def merge_assets(asset1: TAssets, asset2: TAssets, **overrides) -> flow_t:
     return flow_t(**merged)
 
 
+def edge_is_allowed(*assets: esdl.EnergyAsset) -> bool:
+    """Check if the asset combination defines a valid Tulipa edge/flow.
+
+    Valid Tulipa edges are:
+
+    - (asset1, asset2) ->
+      - asset1 ∈ {producer, conversion, storage, energynetwork}
+      - asset2 ∈ {consumer, conversion, storage, energynetwork}
+      - FIXME: some of the above combinations are impossible
+    - (asset1, link, asset2) -> same conditions on asset1, asset2
+      - link is a transport, but not an energynetwork
+
+    NOTE: this function cannot be used on it's own.  It is meant for
+    use in conjunction with a match..case (or equivalent) statement;
+    see :ref:`edge` below.
+
+    """
+    if len(assets) == 2:
+        a1, a2 = assets
+    elif len(assets) == 3:
+        a1, link, a2 = assets
+        if isinstance(link, esdl.EnergyNetwork):
+            raise ValueError(f"{link=}: link node cannot be an energynetwork")
+    else:
+        raise ValueError(f"{assets=}: incorrect number of assets, only {{2,3}}")
+    _kinds = kinds(a1, a2, unique=True)
+    return {"energynetwork"} == _kinds if len(_kinds) < 2 else True
+
+
 def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
     """Create a Tulipa flow, and assets from ESDL assets.
 
@@ -250,7 +279,7 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
            (asset1, link, asset)
 
     """
-    # FIXME: some (from, to) pairs are probably unphysical
+    # FIXME: some (from, to) pairs are probably impossible
     match assets:
         case (
             esdl.Producer()
@@ -261,7 +290,7 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
             | esdl.Conversion()
             | esdl.Storage()
             | esdl.EnergyNetwork() as a2,
-        ) if len(kinds(a1, a2)) == 2:
+        ) if edge_is_allowed(a1, a2):
             from_asset, to_asset = map(fill_asset, assets)
             flow = merge_assets(from_asset, to_asset)
         case (
@@ -274,7 +303,7 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
             | esdl.Conversion()
             | esdl.Storage()
             | esdl.EnergyNetwork() as a2,
-        ) if not isinstance(link, esdl.EnergyNetwork) and len(kinds(a1, a2)) <= 2:
+        ) if edge_is_allowed(a1, link, a2):
             # NOTE: len(kinds(...)) <= 2 to support EnergyNetwork -> EnergyNetwork
             from_asset = fill_asset(a1)
             to_asset = fill_asset(a2)

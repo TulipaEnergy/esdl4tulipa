@@ -4,7 +4,7 @@ import pytest
 from esdl import esdl
 
 from esdl4tulipa.mapping import asset_types
-from esdl4tulipa.parser import batched, find_edges, load
+from esdl4tulipa.parser import batched, edge_is_allowed, find_edges, load
 from esdl4tulipa.parser import debug
 from esdl4tulipa.parser import edge
 from esdl4tulipa.parser import fill_asset
@@ -124,6 +124,26 @@ def test_merge_assets_err(edges):
     body = f"lifetime.+{a1.lifetime}.+{a2.lifetime}"
     with pytest.raises(ValueError, match=f"{hdr}[\s\S]+{body}"):
         assert merge_assets(a1, a2)
+
+
+def test_edge_is_allowed(empty_edges):
+    _edges, _ = empty_edges
+    for _edge in _edges:
+        assert edge_is_allowed(*_edge)
+
+
+def test_edge_not_allowed():
+    assert not edge_is_allowed(esdl.GasProducer(), esdl.GasProducer())
+
+    with pytest.raises(ValueError, match="link node cannot be an energynetwork"):
+        edge_is_allowed(
+            esdl.SolarCollector(), esdl.ElectricityNetwork(), esdl.Battery()
+        )
+
+    with pytest.raises(ValueError, match="incorrect number of assets"):
+        edge_is_allowed(
+            esdl.GasProducer(), esdl.GasNetwork(), esdl.GasNetwork(), esdl.GasDemand()
+        )
 
 
 def test_edge(empty_edges):
