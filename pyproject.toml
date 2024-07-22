@@ -57,6 +57,9 @@ testpaths = ["tests"]
 addopts = ["--import-mode=importlib", "--cov=src", "-q"]
 filterwarnings = ['ignore:invalid escape sequence:SyntaxWarning']
 
+[tool.coverage.run]
+omit = ["src/esdl4tulipa/_version.py"]
+
 [tool.black]
 include = '\.pyi?$'
 extend-exclude ='''
