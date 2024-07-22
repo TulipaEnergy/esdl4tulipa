@@ -60,9 +60,11 @@ def kinds(*assets: esdl.EnergyAsset, unique=True) -> list[str] | set[str]:
             if ks == {"energynetwork", "transport"}:
                 res.append("energynetwork")
             else:
-                raise RuntimeError(f"{a}: unexpected asset type {ks}")
+                raise RuntimeError(f"{a}: ambiguous asset type {ks}")
         else:
             res.extend(ks)
+    if len(res) == 0:
+        raise ValueError(f"{assets}: unknown asset")
     return set(res) if unique else res
 
 

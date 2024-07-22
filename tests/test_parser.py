@@ -72,6 +72,11 @@ def test_asset_kinds(edges):
     assert inferred == _kinds
 
 
+def test_unknown_asset_kinds():
+    with pytest.raises(ValueError, match="unknown asset"):
+        kinds(esdl.BuildingUnit())
+
+
 def test_batched():
     seq = [
         esdl.Pipe(),
@@ -157,6 +162,11 @@ def test_edge(empty_edges):
                 isinstance(a[2], asset_types[_kind[-1]]),
             ]
         )
+
+
+def test_edge_error():
+    with pytest.raises(ValueError, match="uncharted territory"):
+        edge(esdl.GasProducer(), esdl.GasNetwork(), esdl.GasNetwork(), esdl.GasDemand())
 
 
 def test_find_edges(edges):
