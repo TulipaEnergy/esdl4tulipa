@@ -53,7 +53,7 @@ Repository = "https://github.com/TulipaEnergy/esdl4tulipa"
 Issues = "https://github.com/TulipaEnergy/esdl4tulipa/issues"
 
 [tool.setuptools_scm]
-write_to = "src/esdl4tulipa/_version.py"
+version_file = "src/esdl4tulipa/_version.py"
 # default: guess-next-dev, alternatives: post-release, no-guess-dev
 version_scheme = "release-branch-semver"
 
