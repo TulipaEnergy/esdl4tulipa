@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from esdl4tulipa.mapping import AssetData
 from esdl4tulipa.mapping import asset_types
-from esdl4tulipa.mapping import _producer_t
+from esdl4tulipa.mapping import _keys_not_in_esdl
+from esdl4tulipa.mapping import _cost_n_lifetime_t
 import pytest
 import re
 
@@ -49,11 +50,10 @@ def test_esdl_key(kind):
         try:
             assert asset.esdl_key(fld)
         except AssertionError:
-            if fld in ("from_asset", "to_asset"):
-                # from & to nodes have no ESDL equivalent
+            if fld in _keys_not_in_esdl:
                 pass
             else:
                 raise
 
-        if isinstance(asset, _producer_t) and key_re.match(fld):
+        if isinstance(asset, _cost_n_lifetime_t) and key_re.match(fld):
             assert esdl_re.match(asset.esdl_key(fld))

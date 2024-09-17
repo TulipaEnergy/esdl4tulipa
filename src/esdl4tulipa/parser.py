@@ -1,19 +1,25 @@
 """Load and parse an ESDL file."""
 
 import contextlib
+from collections.abc import Callable
 from dataclasses import fields
 from functools import reduce
 from io import StringIO
 from itertools import chain
-from typing import Callable
+from typing import Any
 from typing import Generator
+from typing import Protocol
 from typing import TypeAlias
 from typing import TypeVar
 from typing import cast
+import pandas as pd
 from esdl import esdl
 from esdl.esdl_handler import EnergySystemHandler
 from pyecore.ecore import EOrderedSet
 from tabulate import tabulate
+from .profiles import gen_profile_name
+from .profiles import get_influx_profile
+from .profiles import get_profiles
 from .mapping import TAssets
 from .mapping import asset_types
 from .mapping import flow_t
@@ -80,8 +86,8 @@ def batched(
         technical term: `cdr` of an edge).  Example, the following
         edges:
 
-        - (from, link, to) -> (link, to)
-        - (from, to₂) -> (to)
+        - (from, link, to₁) -> (link, to₁)
+        - (from, to₂) -> (to₂)
         - (from, ...)
 
         are represented as the sequence: (link, to₁, to₂, ...)
@@ -222,6 +228,44 @@ def merge_assets(asset1: TAssets, asset2: TAssets, **overrides) -> flow_t:
     return flow_t(**merged)
 
 
+class Maker(Protocol):  # noqa: D101
+    def __call__(  # noqa: D102
+        self,
+        from_: esdl.EnergyAsset,
+        to_: esdl.EnergyAsset,
+        link: esdl.EnergyAsset | None = None,
+    ) -> tuple[Any, ...]: ...
+
+
+def make_flow_quartet(
+    from_: esdl.EnergyAsset, to_: esdl.EnergyAsset, link: esdl.EnergyAsset | None = None
+) -> tuple[flow_t, TAssets, TAssets, list[esdl.InfluxDBProfile]]:
+    """Make a (flow, from_asset, to_asset, [profile]) quartet."""
+    from_asset = fill_asset(from_)
+    to_asset = fill_asset(to_)
+    if link is None:
+        if profiles := get_profiles(from_, to_):
+            name = gen_profile_name(profiles[0])  # assume one
+        else:
+            name = ""
+        flow = merge_assets(from_asset, to_asset, profile=name)
+    else:
+        if profiles := get_profiles(from_, link, to_):
+            name = gen_profile_name(profiles[0])  # assume one
+        else:
+            name = ""
+        # reset 'name' & 'id' for flow
+        overrides = {
+            "from_asset": from_.name,
+            "to_asset": to_.name,
+            "name": "",
+            "id": "",
+            "profile": name,
+        }
+        flow = cast(flow_t, fill_asset(link, **overrides))
+    return (flow, from_asset, to_asset, profiles if profiles else [])
+
+
 def edge_is_allowed(*assets: esdl.EnergyAsset) -> bool:
     """Check if the asset combination defines a valid Tulipa edge/flow.
 
@@ -251,7 +295,9 @@ def edge_is_allowed(*assets: esdl.EnergyAsset) -> bool:
     return {"energynetwork"} == _kinds if len(_kinds) < 2 else True
 
 
-def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
+def edge(
+    *assets: esdl.EnergyAsset, maker: Maker = make_flow_quartet
+) -> tuple[Any, ...]:
     """Create a Tulipa flow, and assets from ESDL assets.
 
     Parameters
@@ -259,10 +305,16 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
     *assets: esdl.EnergyAsset
         Set of ESDL assets to link and convert.
 
+    maker: Maker
+        Function to create the edge.  Normally the function should
+        return a flow quartet:
+
+          tuple[flow_t, TAssets, TAssets, list[esdl.InfluxDBProfile]]
+
     Returns
     -------
-    tuple[TAssets, ...]
-        Tuple of (flow, from_asset, to_asset)
+    tuple[Any, ...]
+        Typically a tuple of (flow, from_asset, to_asset, [profile])
 
     Raises
     ------
@@ -293,8 +345,7 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
             | esdl.Storage()
             | esdl.EnergyNetwork() as a2,
         ) if edge_is_allowed(a1, a2):
-            from_asset, to_asset = map(fill_asset, assets)
-            flow = merge_assets(from_asset, to_asset)
+            return maker(a1, a2)
         case (
             esdl.Producer()
             | esdl.Conversion()
@@ -307,18 +358,10 @@ def edge(*assets: esdl.EnergyAsset) -> tuple[flow_t, TAssets, TAssets]:
             | esdl.EnergyNetwork() as a2,
         ) if edge_is_allowed(a1, link, a2):
             # NOTE: len(kinds(...)) <= 2 to support EnergyNetwork -> EnergyNetwork
-            from_asset = fill_asset(a1)
-            to_asset = fill_asset(a2)
-            flow = cast(
-                flow_t,
-                # reset 'name' & 'id' for flow
-                fill_asset(link, from_asset=a1.name, to_asset=a2.name, name="", id=""),
-            )
+            return maker(a1, a2, link)
         case _:
             # NOTE: unhandled case: asset, transport, ..., asset
             raise ValueError(f"{assets=}: uncharted territory!")
-
-    return (flow, from_asset, to_asset)
 
 
 def itr_nodes(
@@ -366,7 +409,7 @@ def itr_nodes(
 def hop_nodes(
     asset: esdl.EnergyAsset, edges: list[esdl.EnergyAsset], depth: int = 1
 ) -> list[esdl.EnergyAsset]:
-    """Find all the assets that have an incoming flow from initially provided asset.
+    """For out flows from the provided asset, find all the destination assets.
 
     Parameters
     ----------
@@ -505,14 +548,19 @@ def parse_graph(
     return res
 
 
-def load(path: str) -> tuple[tuple[flow_t, ...], tuple[TAssets, ...]]:
+def load(
+    path: str,
+) -> tuple[tuple[flow_t, ...], tuple[TAssets, ...], tuple[pd.DataFrame, ...]]:
     """Load ESDL file and parse nodes."""
     with contextlib.redirect_stdout(StringIO()):
         ensys = _HANDLER.load_file(path)
     edges = parse_graph(ensys, find_edges, [])
     flows: tuple[flow_t] = tuple(edge[0] for edge in edges)
-    assets: tuple[TAssets, ...] = tuple(set(chain(*(edge[1:] for edge in edges))))
-    return flows, assets
+    assets: tuple[TAssets, ...] = tuple(set(chain(*(edge[1:3] for edge in edges))))
+    profiles = tuple(
+        get_influx_profile(p) for p in set(edge[-1][0] for edge in edges if edge[-1])
+    )  # assume only one
+    return flows, assets, profiles
 
 
 def debug(path: str) -> esdl.EnergySystem:

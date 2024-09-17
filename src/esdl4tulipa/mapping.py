@@ -19,6 +19,10 @@ def unguarded_is_dataclass(_type: Type[T], /) -> bool:
     return is_dataclass(_type)
 
 
+# keys for which there is no ESDL equivalent
+_keys_not_in_esdl = ("profile", "from_asset", "to_asset")
+
+
 @dataclass(unsafe_hash=True)
 class AssetData:
     """Base dataclass to represent :ref:`esdl.esdl.EnergyAsset`."""
@@ -26,6 +30,7 @@ class AssetData:
     name: str = ""
     id: str = ""
     active: bool = False
+    profile: str = ""
 
     @classmethod
     def esdl_key(cls, key: str) -> str:
@@ -65,7 +70,7 @@ class consumer_t(AssetData):  # noqa: D101
 
 
 @dataclass(unsafe_hash=True)
-class _producer_t(AssetData):  # noqa: D101
+class _cost_n_lifetime_t(AssetData):  # noqa: D101
     investment_cost: float | None = None
     variable_cost: float | None = None
     lifetime: float | None = None
@@ -84,7 +89,7 @@ class _producer_t(AssetData):  # noqa: D101
 
 
 @dataclass(unsafe_hash=True)
-class producer_t(_producer_t):  # noqa: D101
+class producer_t(_cost_n_lifetime_t):  # noqa: D101
     initial_capacity: float | None = None
 
     @classmethod
@@ -133,7 +138,7 @@ class storage_t(AssetData):  # noqa: D101
 
 
 @dataclass(unsafe_hash=True)
-class flow_t(_producer_t):  # noqa: D101
+class flow_t(_cost_n_lifetime_t):  # noqa: D101
     from_asset: str = ""
     to_asset: str = ""
     capacity: float | None = None

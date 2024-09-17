@@ -193,18 +193,22 @@ def test_parse_graph():
 
 
 @pytest.mark.parametrize(
-    "fname, nflows, nassets",
+    "fname, nflows, nassets, nprofiles",
     [
-        ("Tiny.esdl", 4, 5),
-        ("norse-mythology-good.esdl", 35, 29),
-        ("vehicle_charging_etc.esdl", 13, 12),
+        ("Tiny.esdl", 4, 5, 0),
+        ("norse-mythology-good.esdl", 35, 29, 0),
+        ("vehicle_charging_etc.esdl", 13, 12, 0),
+        ("Tiny-edr-profiles.esdl", 4, 5, 1),
+        ("norse-mythology-edr-profiles.esdl", 35, 29, 5),
+        ("vehicle_charging_etc_edr_profiles.esdl", 13, 12, 4),
     ],
 )
-def test_load(fname, nflows, nassets):
+def test_load(fname, nflows, nassets, nprofiles):
     # TODO: test more meaningful things
-    flows, assets = load(f"tests/data/esdl/{fname}")
+    flows, assets, profiles = load(f"tests/data/esdl/{fname}")
     assert len(flows) == nflows
     assert len(assets) == nassets
+    assert len(profiles) == nprofiles
 
 
 @pytest.mark.parametrize(
