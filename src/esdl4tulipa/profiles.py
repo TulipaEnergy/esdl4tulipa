@@ -54,6 +54,7 @@ def _get_profile(port: esdl.InPort | esdl.OutPort) -> esdl.InfluxDBProfile | Non
         profile = port.profile[0]
         if "edr" in profile.host.casefold():
             return profile
+    return None
 
 
 def gen_profile_name(profile: esdl.InfluxDBProfile):
