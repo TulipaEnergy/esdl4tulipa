@@ -17,12 +17,12 @@ from esdl import esdl
 from esdl.esdl_handler import EnergySystemHandler
 from pyecore.ecore import EOrderedSet
 from tabulate import tabulate
-from .profiles import gen_profile_name
-from .profiles import get_influx_profile
-from .profiles import get_profiles
 from .mapping import TAssets
 from .mapping import asset_types
 from .mapping import flow_t
+from .profiles import gen_profile_name
+from .profiles import get_influx_profile
+from .profiles import get_profiles
 
 _HANDLER = EnergySystemHandler()
 
